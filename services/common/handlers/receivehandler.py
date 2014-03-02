@@ -26,7 +26,7 @@ class ReceiveHandler(Thread):
                 self._logger.warning("EOF occurred while reading incoming message.")
                 time.sleep(1)
                 continue
-            self._logger.info('Received message [%s] for the service [%s].', str(data['message']), data['target_service'])
+            self._logger.debug('Received message [%s] for the service [%s].', str(data['message']), data['target_service'])
             self._communication_service.get_service_queue(data['target_service']).put(data['message'])
         self._logger.info("Receive Handler run complete.")
 

@@ -22,8 +22,8 @@ class SendHandler(Thread):
                 (target_name, target_service, message) = self._queue.get(True, 5)
             except Empty:
                 continue
-            if target_name == self._communication_service.get_name():
-                self._logger.info('Sending message [%s] to target service [%s].', str(message), target_service)
+            if target_name == self._communication_service.get_name() or target_name is None:
+                self._logger.debug('Sending message [%s] to target service [%s].', str(message), target_service)
                 self._communication_service.get_service_queue(target_service).put(message)
             else:
                 self._logger.info('Sending message [%s] to target service [%s] on node [%s].', str(message), target_service, target_name)

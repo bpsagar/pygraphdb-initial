@@ -1,12 +1,14 @@
 __author__ = 'Sagar'
 from threading import Thread
 import socket
-from pygraphdb.services.common.socketwrapper import SocketReadWrite
 import logging
-from pygraphdb.services.common.receivehandler import ReceiveHandler
-from pygraphdb.services.common.sendhandler import SendHandler
-from pygraphdb.services.common.client import Client
 import time
+
+from pygraphdb.services.common.socketwrapper import SocketReadWrite
+from pygraphdb.services.common.handlers.receivehandler import ReceiveHandler
+from pygraphdb.services.common.handlers.sendhandler import SendHandler
+from pygraphdb.services.common.client import Client
+
 
 class ClientConnectionHandler(Thread):
     def __init__(self, host, port, name, comm_service):

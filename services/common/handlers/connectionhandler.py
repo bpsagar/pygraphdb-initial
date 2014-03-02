@@ -2,10 +2,12 @@ __author__ = 'Sagar'
 from threading import Thread
 import logging
 import socket
+
 from pygraphdb.services.common.socketwrapper import SocketReadWrite
-from pygraphdb.services.common.receivehandler import ReceiveHandler
-from pygraphdb.services.common.sendhandler import SendHandler
+from pygraphdb.services.common.handlers.receivehandler import ReceiveHandler
+from pygraphdb.services.common.handlers.sendhandler import SendHandler
 from pygraphdb.services.common.client import Client
+
 
 class ConnectionHandler(Thread):
     def __init__(self, host, port, name, comm_service):
@@ -21,7 +23,10 @@ class ConnectionHandler(Thread):
         self._clients = []
 
     def send(self, target_name, target_service, message):
-        self._communication_service.get_client(target_name).get_send_handler().send(target_name, target_service, message)
+        if target_name == self._communication_service.get_name():
+            self._communication_service.get_queue().put(message)
+        else:
+            self._communication_service.get_client(target_name).get_send_handler().send(target_name, target_service, message)
 
     def run(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
