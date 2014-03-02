@@ -1,1 +1,1 @@
-00000047*{"id": 1, "type": "Person", "properties": {"Age": 21, "Name": "Sagar"}}00000047*{"id": 1, "type": "Person", "properties": {"Age": 20, "Name": "Sagar"}}
+00000047 {"properties": {"Name": "Sagar", "Age": 21}, "type": "Person", "id": 1}

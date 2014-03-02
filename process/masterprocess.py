@@ -5,6 +5,10 @@ from pygraphdb.services.worker.node import Node
 from pygraphdb.services.messages.addnode import AddNode
 from pygraphdb.services.messages.updatenode import UpdateNode
 from pygraphdb.services.messages.deletenode import DeleteNode
+from pygraphdb.services.worker.edge import Edge
+from pygraphdb.services.messages.addedge import AddEdge
+from pygraphdb.services.messages.deleteedge import DeleteEdge
+from pygraphdb.services.messages.updateedge import UpdateEdge
 import time
 import configparser
 
@@ -34,6 +38,13 @@ class MasterProcess(object):
         heartbeat_service.start()
         self._services['HeartBeatService'] = heartbeat_service
 
+        self.test_storage()
+
+    def stop(self):
+        for service in self._services.values():
+            service.stop()
+
+    def test_storage(self):
         node = Node()
         node._id = 1
         node._type = 'Person'
@@ -41,15 +52,15 @@ class MasterProcess(object):
         node.set_property('Age', 21)
         time.sleep(3)
         add_node = AddNode(node)
-        communication_service.send('WORKER1', 'StorageService', add_node)
-        time.sleep(10)
-        node.set_property('Age', 20)
-        update_node = UpdateNode(node)
-        communication_service.send('WORKER1', 'StorageService', update_node)
-        time.sleep(3)
-        delete_node = DeleteNode(node)
-        communication_service.send('WORKER1', 'StorageService', delete_node)
+        self._services['CommunicationService'].send('WORKER1', 'StorageService', add_node)
 
-    def stop(self):
-        for service in self._services.values():
-            service.stop()
+        edge = Edge()
+        edge._id = 10
+        edge._type = 'Relation'
+        edge._node1_id = 1
+        edge._node2_id = 2
+        edge.set_property('Name', 'Sagar')
+        edge.set_property('Age', 21)
+        time.sleep(3)
+        update_edge = UpdateEdge(edge)
+        self._services['CommunicationService'].send('WORKER1', 'StorageService', update_edge)

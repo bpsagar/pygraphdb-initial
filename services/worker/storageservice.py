@@ -3,11 +3,15 @@ from pygraphdb.services.common.service import Service
 from pygraphdb.services.messages.addnode import AddNode
 from pygraphdb.services.messages.deletenode import DeleteNode
 from pygraphdb.services.messages.updatenode import UpdateNode
+from pygraphdb.services.messages.addedge import AddEdge
+from pygraphdb.services.messages.deleteedge import DeleteEdge
+from pygraphdb.services.messages.updateedge import UpdateEdge
 from queue import Queue, Empty
 import json
 import logging
 import os
 from pygraphdb.services.worker.node import Node
+from pygraphdb.services.worker.edge import Edge
 
 class StorageService(Service):
     def __init__(self, dir, comm_service):
@@ -23,9 +27,10 @@ class StorageService(Service):
     def run(self):
         self._logger.info("Storage Service started on node [%s].", self._communication_service.get_name())
         node_file_path = os.path.join(self._directory, self._node_file)
-        self._node_fd = open(node_file_path, "rb+")
-        edge_file_path = os.path.join(self._directory, self._node_file)
-        self._edge_fd = open(edge_file_path, "rb+")
+        edge_file_path = os.path.join(self._directory, self._edge_file)
+        self._node_fd = open(node_file_path, "wb+")
+        self._edge_fd = open(edge_file_path, "wb+")
+
         while self._running:
             try:
                 message = self._queue.get(True, 5)
@@ -39,6 +44,16 @@ class StorageService(Service):
 
             if isinstance(message, UpdateNode):
                 self.update_node(message.get_node(), message.get_index())
+
+            if isinstance(message, AddEdge):
+                self.add_edge(message.get_edge())
+
+            if isinstance(message, DeleteEdge):
+                self.delete_edge(message.get_edge().get_id(), message.get_index())
+
+            if isinstance(message, UpdateEdge):
+                self.update_edge(message.get_edge(), message.get_index())
+
         self._node_fd.close()
         self._edge_fd.close()
 
@@ -85,7 +100,7 @@ class StorageService(Service):
         else:
             node_position = index
             self._node_fd.seek(index,0)
-            node = self.return_node()
+            node = self.read_node()
 
         if node:
             self._node_fd.seek(node_position, 0)
@@ -98,6 +113,63 @@ class StorageService(Service):
         self.delete_node(node.get_id(), index)
         self.add_node(node)
         self._logger.info("Updated node [id=%s].", node.get_id())
+
+    def add_edge(self, edge):
+        data = edge.dump()
+        data_size = "%08x" % len(data)
+        self._edge_fd.seek(0, 2) # 2 - end of file reference
+        record = data_size + " " + data
+        self._edge_fd.write(bytes(record, 'UTF-8'))
+        self._logger.info("Added a new edge [id=%s] to the database.", edge.get_id())
+
+    def read_edge(self):
+        delete_marker = '*'
+        edge = None
+        size = 0
+        while delete_marker == '*':
+            size = self._edge_fd.read(8).decode("UTF-8")
+            if size == '':
+                return (None, None)
+            edge_position = self._edge_fd.tell()
+            delete_marker = self._edge_fd.read(1).decode("UTF-8")
+            size = int(size, 16)
+            if delete_marker == '*':
+                self._edge_fd.seek(size, 1)
+        full_data = ''
+        while size > 0:
+            data = self._edge_fd.read(size).decode("UTF-8")
+            size -= len(data)
+            full_data += data
+        edge = Edge()
+        edge.load(full_data)
+        return (edge, edge_position)
+
+    def delete_edge(self, edge_id, index=None):
+        if index is None:
+            self._edge_fd.seek(0, 0) # 0 - beginning of the file reference
+            node = None
+            while True:
+                edge, edge_position = self.read_edge()
+                if edge is None:
+                    break
+                if edge.get_id() == edge_id:
+                    break
+        else:
+            edge_position = index
+            self._edge_fd.seek(index,0)
+            edge = self.read_edge()
+
+        if edge:
+            self._edge_fd.seek(edge_position, 0)
+            self._edge_fd.write(bytes('*', "UTF-8"))
+            self._logger.info("Deleted edge [id=%s].", edge_id)
+        else:
+            self._logger.warning("Could not find edge [id=%s].", edge_id)
+
+    def update_edge(self, edge, index=None):
+        self.delete_edge(edge.get_id(), index)
+        self.add_edge(edge)
+        self._logger.info("Updated edge [id=%s].", edge.get_id())
 
     def stop(self):
         self._running = False
