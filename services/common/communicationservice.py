@@ -1,15 +1,11 @@
 __author__ = 'Sagar'
-import socket
-from threading import Thread
 import logging
+from queue import Queue, Empty
 
 from pygraphdb.services.common.service import Service
-from pygraphdb.services.common.connectionhandler import ConnectionHandler
-from pygraphdb.services.common.clientconnectionhandler import ClientConnectionHandler
-from pygraphdb.services.common.socketwrapper import SocketReadWrite
-from queue import Queue, Empty
+from pygraphdb.services.common.handlers.connectionhandler import ConnectionHandler
+from pygraphdb.services.common.handlers.clientconnectionhandler import ClientConnectionHandler
 from pygraphdb.services.common.heartbeatservice import DeadNode
-import time
 
 
 class CommunicationService(Service):
@@ -26,7 +22,6 @@ class CommunicationService(Service):
         self._handler = None
         self._queue = Queue()
         self._running = True
-        self._communication_service_queue_handler = None
 
     def run(self):
         self._logger.info('Starting Communication Service for node [%s].', self._name)
@@ -79,7 +74,6 @@ class CommunicationService(Service):
 
     def stop(self):
         self._handler.stop()
-        self._communication_service_queue_handler.stop()
 
     def get_client_list(self):
         return self._clients.values()

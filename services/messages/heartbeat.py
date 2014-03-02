@@ -1,6 +1,7 @@
 __author__ = 'Sagar'
+from pygraphdb.services.messages.message import Message
 
-class HeartBeat(object):
+class HeartBeat(Message):
     def __init__(self, sender, timestamp, counter):
         super(HeartBeat, self).__init__()
         self._sender = sender

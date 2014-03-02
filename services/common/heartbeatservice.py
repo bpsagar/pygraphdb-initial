@@ -33,10 +33,12 @@ class HeartBeatService(Service):
                 elif self._clients_counter[client.get_name()] < 5:
                     self.send_heartbeat(client)
                 else:
-                    self._logger.info("Dead node [%s].", client.get_name())
+                    self._logger.error("Dead node [%s].", client.get_name())
                     message = DeadNode(client)
                     self._clients_counter.pop(client.get_name())
-                    self._communication_service.get_queue().put(message)
+                    self._communication_service.send(self._communication_service.get_name(), 'CommunicationService', message)
+
+        self._logger.info("HeartBeat Service for node [%s] run complete.", self._communication_service.get_name())
 
     def process_queue(self):
         queue_size = self._queue.qsize()
