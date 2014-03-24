@@ -9,36 +9,35 @@ import time
 import logging
 
 class HeartBeatService(Service):
-    def __init__(self, comm_service, interval):
-        super(HeartBeatService, self).__init__()
+    def construct(self, config):
         self._queue = Queue()
-        self._communication_service = comm_service
+        self._communication_service = config.get('communication_service')
         self._clients = []
-        self._running = True
-        self._interval = interval
+        self._interval = config.get('interval')
         self._clients_counter = {}
-        self._logger = logging.getLogger(self.__class__.__name__)
 
-    def run(self):
-        self._logger.info("HeartBeat Service registered for node [%s].", self._communication_service.get_name())
-        self._logger.info("HeartBeat Service for node [%s] started.", self._communication_service.get_name())
-        while self._running:
-            self._clients[:] = [client for client in self._communication_service.get_client_list()]
-            time.sleep(self._interval)
-            self.process_queue()
-            for client in self._clients:
+    def init(self):
+        pass
 
-                if client.get_name() not in self._clients_counter.keys():
-                    self._clients_counter[client.get_name()] = 0
-                elif self._clients_counter[client.get_name()] < 5:
-                    self.send_heartbeat(client)
-                else:
-                    self._logger.error("Dead node [%s].", client.get_name())
-                    message = DeadNode(client)
-                    self._clients_counter.pop(client.get_name())
-                    self._communication_service.send(self._communication_service.get_name(), 'CommunicationService', message)
+    def do_work(self):
+        self._clients[:] = [client for client in self._communication_service.get_client_list()]
+        time.sleep(self._interval)
+        self.process_queue()
+        for client in self._clients:
 
-        self._logger.info("HeartBeat Service for node [%s] run complete.", self._communication_service.get_name())
+            if client.get_name() not in self._clients_counter.keys():
+                self._clients_counter[client.get_name()] = 0
+            elif self._clients_counter[client.get_name()] < 5:
+                self.send_heartbeat(client)
+            else:
+                self._logger.error("Dead node [%s].", client.get_name())
+                message = DeadNode(client)
+                self._clients_counter.pop(client.get_name())
+                self._communication_service.send(self._communication_service.get_name(), 'CommunicationService', message)
+        return True
+
+    def deinit(self):
+        pass
 
     def process_queue(self):
         queue_size = self._queue.qsize()

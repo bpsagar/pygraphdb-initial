@@ -14,46 +14,46 @@ from pygraphdb.services.worker.node import Node
 from pygraphdb.services.worker.edge import Edge
 
 class StorageService(Service):
-    def __init__(self, dir, comm_service):
-        super(StorageService, self).__init__()
-        self._directory = dir
-        self._communication_service = comm_service
-        self._node_file = "nodedata"
-        self._edge_file = "edgedata"
+    def construct(self, config):
+        self._directory = config.get('directory')
+        self._communication_service = config.get('communication_service')
+        self._node_file = config.get('node_file', "nodedata")
+        self._edge_file = config.get('edge_file', "edgedata")
         self._queue = Queue()
-        self._running = True
-        self._logger = logging.getLogger(self.__class__.__name__)
 
-    def run(self):
+    def init(self):
         self._logger.info("Storage Service started on node [%s].", self._communication_service.get_name())
         node_file_path = os.path.join(self._directory, self._node_file)
         edge_file_path = os.path.join(self._directory, self._edge_file)
         self._node_fd = open(node_file_path, "wb+")
         self._edge_fd = open(edge_file_path, "wb+")
 
-        while self._running:
-            try:
-                message = self._queue.get(True, 5)
-            except Empty:
-                continue
-            if isinstance(message, AddNode):
-                self.add_node(message.get_node())
+    def do_work(self):
+        try:
+            message = self._queue.get(True, 5)
+        except Empty:
+            raise TimeoutError
+        if isinstance(message, AddNode):
+            self.add_node(message.get_node())
 
-            if isinstance(message, DeleteNode):
-                self.delete_node(message.get_node().get_id(), message.get_index())
+        if isinstance(message, DeleteNode):
+            self.delete_node(message.get_node().get_id(), message.get_index())
 
-            if isinstance(message, UpdateNode):
-                self.update_node(message.get_node(), message.get_index())
+        if isinstance(message, UpdateNode):
+            self.update_node(message.get_node(), message.get_index())
 
-            if isinstance(message, AddEdge):
-                self.add_edge(message.get_edge())
+        if isinstance(message, AddEdge):
+            self.add_edge(message.get_edge())
 
-            if isinstance(message, DeleteEdge):
-                self.delete_edge(message.get_edge().get_id(), message.get_index())
+        if isinstance(message, DeleteEdge):
+            self.delete_edge(message.get_edge().get_id(), message.get_index())
 
-            if isinstance(message, UpdateEdge):
-                self.update_edge(message.get_edge(), message.get_index())
+        if isinstance(message, UpdateEdge):
+            self.update_edge(message.get_edge(), message.get_index())
 
+        return True
+
+    def deinit(self):
         self._node_fd.close()
         self._edge_fd.close()
 

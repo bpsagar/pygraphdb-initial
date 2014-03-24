@@ -1,5 +1,4 @@
 __author__ = 'Sagar'
-from threading import Thread
 import logging
 import socket
 
@@ -7,69 +6,62 @@ from pygraphdb.services.common.socketwrapper import SocketReadWrite
 from pygraphdb.services.common.handlers.receivehandler import ReceiveHandler
 from pygraphdb.services.common.handlers.sendhandler import SendHandler
 from pygraphdb.services.common.client import Client
+from pygraphdb.services.common.service import Service
 
+class ConnectionHandler(Service):
 
-class ConnectionHandler(Thread):
-    def __init__(self, host, port, name, comm_service):
-        super(ConnectionHandler, self).__init__()
-        self._host = host
-        self._port = port
-        self._name = name
-        self._communication_service = comm_service
-        self._logger = logging.getLogger(self.__class__.__name__)
+    def construct(self, config):
+        self._host = config.get('host', 'localhost')
+        self._port = config.get('port', 4545)
+        self._node_name = config.get('node_name', 'Master')
         self.socket = None
-        self._running = True
         self._handlers = []
         self._clients = []
+        self._timeout = 1
 
-    def send(self, target_name, target_service, message):
-        if target_name == self._communication_service.get_name():
-            self._communication_service.get_queue().put(message)
-        else:
-            self._communication_service.get_client(target_name).get_send_handler().send(target_name, target_service, message)
+    def init(self):
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.settimeout(self._timeout)
+        self._socket.bind((self._host, self._port))
+        self._socket.listen(5)
 
-    def run(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.settimeout(5)
-        self.socket.bind((self._host, self._port))
-        self.socket.listen(5)
-
-        while self._running:
-            try:
-                (client_socket, address) = self.socket.accept()
-            except socket.timeout:
-                continue
-            self._logger.info('New client request received from [%s:%d]', address[0], address[1])
-            client_socket_wrapper = SocketReadWrite(client_socket)
-            client = self.handshake(client_socket_wrapper)
-            self._clients.append(client)
-            self._communication_service.add_client(client)
-
-            receive_handler = ReceiveHandler(self._communication_service, client_socket_wrapper, client)
-            receive_handler.start()
-            self._handlers.append(receive_handler)
-
-            send_handler = SendHandler(self._communication_service, client)
-            send_handler.start()
-            self._handlers.append(send_handler)
-
-            client.set_handlers(receive_handler, send_handler)
-
-        for handler in self._handlers:
-            handler.stop()
-            handler.join()
+    def deinit(self):
         for client in self._clients:
             client.close()
+        self._socket.close()
 
-        self._logger.info("Server Connection Handler [%s] run complete.", self._name)
+    def do_work(self):
+        try:
+            (client_socket, address) = self._socket.accept()
+        except socket.timeout:
+            raise TimeoutError
+
+        self._logger.info('New client request received from [%s:%d]', address[0], address[1])
+        client_socket_wrapper = SocketReadWrite(client_socket)
+        client = self.handshake(client_socket_wrapper)
+        self._clients.append(client)
+        self.get_parent().add_client(client)
+
+        receive_handler = ReceiveHandler(parent=self, socket_wrapper=client_socket_wrapper, client=client)
+        receive_handler.start()
+        self._handlers.append(receive_handler)
+
+        send_handler = SendHandler(parent=self, client=client)
+        send_handler.startup()
+        self._handlers.append(send_handler)
+
+        client.set_handlers(receive_handler, send_handler)
+        return True
+
+    def send(self, target_name, target_service, message):
+        if target_name == self.get_parent().get_name():
+            self.get_parent().get_queue().put(message)
+        else:
+            self.get_parent().get_client(target_name).get_send_handler().send(target_name, target_service, message)
 
     def handshake(self, client_socket_wrapper):
         client_info = client_socket_wrapper.read()
-        client_socket_wrapper.write(self._name)
+        client_socket_wrapper.write(self._node_name)
         client = Client(client_info, client_socket_wrapper)
         self._logger.info('Handshake complete with client [%s].', client.get_name())
         return client
-
-    def stop(self):
-        self._running = False
-        self._logger.info("Server Connection Handler [%s] stop requested.", self._name)

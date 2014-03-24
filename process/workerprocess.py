@@ -1,5 +1,5 @@
 __author__ = 'Sagar'
-from pygraphdb.services.common.communicationservice import CommunicationService
+from pygraphdb.services.common.communicationservice import Communication
 from pygraphdb.services.common.heartbeatservice import HeartBeatService
 from pygraphdb.services.worker.storageservice import StorageService
 import configparser
@@ -20,21 +20,21 @@ class WorkerProcess(object):
         self._master_hostname = config['Node']['MasterNodeHostname']
 
     def run(self):
-        communication_service = CommunicationService(self._master_hostname, self._master_port, self._name, False)
-        communication_service.start()
+        communication_service = Communication(host='localhost', port=4545, service_name='Worker', server=False)
+        communication_service.startup()
         self._services['CommunicationService'] = communication_service
         communication_service.register('CommunicationService', communication_service.get_queue())
 
-        heartbeat_service = HeartBeatService(communication_service, 5)
+        heartbeat_service = HeartBeatService(communication_service=communication_service, interval=5)
         communication_service.register('HeartBeatService', heartbeat_service.get_queue())
-        heartbeat_service.start()
+        heartbeat_service.startup()
         self._services['HeartBeatService'] = heartbeat_service
 
-        storage_service = StorageService("C:\\Users\\Sagar\\PycharmProjects\\pygraphdb\\pygraphdb", communication_service)
+        storage_service = StorageService(directory="C:\\Users\\Sagar\\PycharmProjects\\pygraphdb\\pygraphdb", communication_service=communication_service)
         communication_service.register('StorageService', storage_service.get_queue())
-        storage_service.start()
+        storage_service.startup()
         self._services['StorageService'] = storage_service
 
     def stop(self):
         for service in self._services.values():
-            service.stop()
+            service.shutdown()

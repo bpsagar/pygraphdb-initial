@@ -8,55 +8,47 @@ from pygraphdb.services.common.socketwrapper import SocketReadWrite
 from pygraphdb.services.common.handlers.receivehandler import ReceiveHandler
 from pygraphdb.services.common.handlers.sendhandler import SendHandler
 from pygraphdb.services.common.client import Client
+from pygraphdb.services.common.service import Service
 
 
-class ClientConnectionHandler(Thread):
-    def __init__(self, host, port, name, comm_service):
-        super(ClientConnectionHandler, self).__init__()
-        self._host = host
-        self._port = port
-        self._name = name
-        self._communication_service = comm_service
-        self._logger = logging.getLogger(self.__class__.__name__)
+class ClientConnectionHandler(Service):
+
+    def construct(self, config={}):
+        self._host = config.get('host', 'localhost')
+        self._port = config.get('port', 4545)
         self._socket_wrapper = None
         self._send_handler = None
         self._receive_handler = None
+        self._node_name = config.get('node_name', 'Worker')
         self._master_node_name = None
-        self._running = True
+        self._timeout = 1
 
-    def run(self):
+    def init(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket_wrapper = SocketReadWrite(s)
         self._logger.info('Connecting to master node.')
         s.connect((self._host, self._port))
         client = self.handshake(self._socket_wrapper)
-        self._communication_service.add_client(client)
+        self.get_parent().add_client(client)
         self._logger.info('Connection to master node successful.')
-        self._receive_handler = ReceiveHandler(self._communication_service, self._socket_wrapper, client)
+        self._receive_handler = ReceiveHandler(parent=self, socket_wrapper=self._socket_wrapper, client=client)
         self._receive_handler.start()
-        self._send_handler = SendHandler(self._communication_service, client)
+        self._send_handler = SendHandler(parent=self, client=client)
         self._send_handler.start()
 
-        while self._running:
-            time.sleep(5)
-
-        self._send_handler.stop()
-        self._send_handler.join()
-        self._receive_handler.stop()
-        self._receive_handler.join()
+    def deinit(self):
         self._socket_wrapper.close()
-        self._logger.info("Client Connection Handler [%s] run complete.", self._name)
+
+    def do_work(self):
+        time.sleep(self._timeout)
+        raise TimeoutError
 
     def send(self, target_name, target_service, message):
         self._send_handler.send(target_name, target_service, message)
 
     def handshake(self, socket_wrapper):
-        socket_wrapper.write(self._name)
+        socket_wrapper.write(self._node_name)
         self._master_node_name = socket_wrapper.read()
         client = Client(self._master_node_name, socket_wrapper)
         self._logger.info('Handshake complete with the master node [%s]', self._master_node_name)
         return client
-
-    def stop(self):
-        self._running = False
-        self._logger.info("Client Connection Handler [%s] stop requested.", self._name)

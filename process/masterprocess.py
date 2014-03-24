@@ -1,5 +1,5 @@
 __author__ = 'Sagar'
-from pygraphdb.services.common.communicationservice import CommunicationService
+from pygraphdb.services.common.communicationservice import Communication
 from pygraphdb.services.common.heartbeatservice import HeartBeatService
 from pygraphdb.services.worker.node import Node
 from pygraphdb.services.messages.addnode import AddNode
@@ -28,21 +28,21 @@ class MasterProcess(object):
         self._hostname = config['Node']['Hostname']
 
     def run(self):
-        communication_service = CommunicationService(self._hostname, self._port, self._name, True)
-        communication_service.start()
+        communication_service = Communication(host='localhost', port=4545, service_name='Master', server=True)
+        communication_service.startup()
         self._services['CommunicationService'] = communication_service
         communication_service.register('CommunicationService', communication_service.get_queue())
 
-        heartbeat_service = HeartBeatService(communication_service, 5)
+        heartbeat_service = HeartBeatService(communication_service=communication_service, interval=5)
         communication_service.register('HeartBeatService', heartbeat_service.get_queue())
-        heartbeat_service.start()
+        heartbeat_service.startup()
         self._services['HeartBeatService'] = heartbeat_service
 
-        self.test_storage()
+        #self.test_storage()
 
     def stop(self):
         for service in self._services.values():
-            service.stop()
+            service.shutdown()
 
     def test_storage(self):
         node = Node()

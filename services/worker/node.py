@@ -30,3 +30,6 @@ class Node(object):
 
     def get_id(self):
         return self._id
+
+    def get_type(self):
+        return self._type

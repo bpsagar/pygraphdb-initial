@@ -8,51 +8,54 @@ from pygraphdb.services.common.handlers.clientconnectionhandler import ClientCon
 from pygraphdb.services.common.heartbeatservice import DeadNode
 
 
-class CommunicationService(Service):
+class Communication(Service):
 
-    def __init__(self, host, port, name, server=False):
-        super(CommunicationService, self).__init__()
-        self._server = server
-        self._host = host
-        self._port = port
+    # Service functions
+    def construct(self, config):
         self._service_queues = {}
-        self._name = name
-        self._logger = logging.getLogger(self.__class__.__name__)
         self._clients = {}
-        self._handler = None
         self._queue = Queue()
-        self._running = True
+        self._server = config.get('server', False)
+        self._host = config.get('host', 'localhost')
+        self._port = config.get('port', 4545)
+        self._timeout = 1
 
-    def run(self):
-        self._logger.info('Starting Communication Service for node [%s].', self._name)
-
+    def init(self):
+        self._handler = None
         if self._server:
-            connection_handler = ConnectionHandler(self._host, self._port, self._name, self)
-            connection_handler.start()
+            connection_handler = ConnectionHandler(
+                host=self._host, port=self._port,
+                service_name='%s[ConnectionHandler]' % self._service_name,
+                parent=self)
             self._handler = connection_handler
+            connection_handler.startup()
         else:
-            client_connection_handler = ClientConnectionHandler(self._host, self._port, self._name, self)
-            client_connection_handler.start()
+            client_connection_handler = ClientConnectionHandler(
+                host=self._host, port=self._port,
+                service_name='%s[ConnectionHandler]' % self._service_name,
+                parent=self)
             self._handler = client_connection_handler
+            client_connection_handler.startup()
 
-        while self._running:
-            try:
-                message = self._queue.get(True, 5)
-            except Empty:
-                continue
+    def deinit(self):
+        self._handler.shutdown()
 
-            if isinstance(message, DeadNode):
-                if self._server:
-                    self.remove_client(message.get_client())
-                    self._logger.info("Removed client [%s] from client list.", message.get_client().get_name())
-                else:
-                    self.remove_client(message.get_client())
-                    self._logger.info("Removed client [%s] from client list.", message.get_client().get_name())
-                    pass
+    def do_work(self):
+        try:
+            message = self._queue.get(True, self._timeout)
+        except Empty:
+            raise TimeoutError
 
-        self._handler.join()
-        self._logger.info("Communication Service for node [%s] complete.", self._name)
+        if isinstance(message, DeadNode):
+            if self._server:
+                self.remove_client(message.get_client())
+                self._logger.info("Removed client [%s] from client list.", message.get_client().get_name())
+            else:
+                self.remove_client(message.get_client())
+                self._logger.info("Removed client [%s] from client list.", message.get_client().get_name())
+        return True
 
+    # Helper functions
     def add_client(self, client):
         self._clients[client.get_name()] = client
         self._logger.info('New client [%s] connected.', client.get_name())
@@ -61,7 +64,7 @@ class CommunicationService(Service):
         self._handler.send(target_name, target_service, message)
 
     def get_name(self):
-        return self._name
+        return self._service_name
 
     def get_client(self, client_name):
         return self._clients[client_name]
@@ -71,9 +74,6 @@ class CommunicationService(Service):
 
     def get_service_queue(self, service_name):
         return self._service_queues.get(service_name, None)
-
-    def stop(self):
-        self._handler.stop()
 
     def get_client_list(self):
         return self._clients.values()
